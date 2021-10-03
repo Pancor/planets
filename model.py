@@ -1,11 +1,7 @@
 import datetime
 
 import tensorflow as tf
-import matplotlib.pyplot as plt
-import numpy as np
-import itertools
-import sklearn.metrics
-import io
+from utils.confusion_matrix_callback import ConfusionMatrixCallback
 
 
 def convert_av_training_set(av_training_set):
@@ -38,72 +34,22 @@ def read_tfrecord(record):
 
     return local_light_curve, av_training_set
 
-
-def plot_confusion_matrix(cm, class_names):
-    figure = plt.figure(figsize=(8, 8))
-    plt.imshow(cm, interpolation='nearest', cmap=plt.get_cmap("Blues"))
-    plt.title("Confusion matrix")
-    plt.colorbar()
-    tick_marks = np.arange(len(class_names))
-    plt.xticks(tick_marks, class_names, rotation=45)
-    plt.yticks(tick_marks, class_names)
-
-    # Compute the labels from the normalized confusion matrix.
-    labels = np.around(cm.astype('float') / cm.sum(axis=1)[:, np.newaxis], decimals=2)
-
-    # Use white text if squares are dark; otherwise black.
-    threshold = cm.max() / 2.
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        color = "white" if cm[i, j] > threshold else "black"
-        plt.text(j, i, labels[i, j], horizontalalignment="center", color=color)
-
-    plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-    return figure
-
-
-def plot_to_image(figure):
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-
-    plt.close(figure)
-    buf.seek(0)
-
-    image = tf.image.decode_png(buf.getvalue(), channels=4)
-    image = tf.expand_dims(image, 0)
-    return image
-
-
-def log_confusion_matrix(epoch, logs):
-    valid_curves = []
-    valid_labels = []
-
-    for batch in valid_dataset:
-        for curve in batch[0]:
-            valid_curves.append(curve.numpy())
-        for label in batch[1]:
-            valid_labels.append(label.numpy())
-
-    valid_curves = np.array(valid_curves)
-    valid_labels = np.array(valid_labels)
-
-    predictions = np.argmax(model.predict(valid_curves), axis=1)
-
-    confusion_matrix = sklearn.metrics.confusion_matrix(valid_labels, predictions)
-    figure_cm = plot_confusion_matrix(confusion_matrix, ["PC", "AFP", "NTP"])
-    # figure_cm.show()
-
-    cm_image = plot_to_image(figure_cm)
-
-    with file_writer_cm.as_default():
-        tf.summary.image("Confusion Matrix", cm_image, step=epoch)
-
-
 train_files = tf.io.gfile.glob("./tfrecord/train-*")
 train_dataset = tf.data.TFRecordDataset(filenames=train_files)
 train_dataset = train_dataset.map(lambda x: tf.py_function(read_tfrecord, [x], (tf.float32, tf.int8)))
 train_dataset = train_dataset.batch(32)
+
+pc = afp = ntp = 0
+for batch in train_dataset:
+    for label in batch[1]:
+        if label == 1:
+            pc = pc + 1
+        elif label == 2:
+            afp = afp + 1
+        else:
+            ntp = ntp + 1
+
+print("PC: {}, AFP: ${}, NTP: {}".format(pc, afp, ntp))
 
 valid_files = tf.io.gfile.glob("./tfrecord/val-*")
 valid_dataset = tf.data.TFRecordDataset(filenames=valid_files)
@@ -138,12 +84,11 @@ model.compile(optimizer='rmsprop',
               loss=tf.keras.losses.SparseCategoricalCrossentropy(),
               metrics=['sparse_categorical_accuracy'])
 
-cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
-
+confusion_matrix_callback = ConfusionMatrixCallback(log_dir, valid_dataset)
 model.fit(train_dataset,
           epochs=3,
           validation_data=valid_dataset,
-          callbacks=[tensorboard_callback, cm_callback],
+          callbacks=[tensorboard_callback, confusion_matrix_callback],
           )
 
 
