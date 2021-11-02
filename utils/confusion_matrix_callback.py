@@ -8,6 +8,8 @@ import io
 
 class ConfusionMatrixCallback(tf.keras.callbacks.Callback):
 
+    is_showing_cm = False
+
     def __init__(self, log_dir, dataset):
         super(ConfusionMatrixCallback, self).__init__()
         self.file_writer_cm = tf.summary.create_file_writer(log_dir + "/cm")
@@ -18,6 +20,9 @@ class ConfusionMatrixCallback(tf.keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs=None):
         self.__log_confusion_matrix(epoch)
+
+    def set_showing_confusion_matrix(self, is_showing_cm):
+        self.is_showing_cm = is_showing_cm
 
     @staticmethod
     def __extract_dataset(dataset):
@@ -38,8 +43,9 @@ class ConfusionMatrixCallback(tf.keras.callbacks.Callback):
         predictions = np.argmax(self.model.predict(self.curves), axis=1)
         confusion_matrix = sklearn.metrics.confusion_matrix(self.labels, predictions)
 
-        figure_cm = self.__plot_confusion_matrix(confusion_matrix, ["PC", "AFP", "NTP"])
-        # figure_cm.show()
+        figure_cm = self.__plot_confusion_matrix(confusion_matrix, ["PC", "NTP"])
+        if self.is_showing_cm:
+            figure_cm.show()
         cm_image = self.__plot_to_image(figure_cm)
 
         with self.file_writer_cm.as_default():
