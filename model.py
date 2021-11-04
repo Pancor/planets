@@ -2,6 +2,7 @@ import datetime
 
 import tensorflow as tf
 from utils.confusion_matrix_callback import ConfusionMatrixCallback
+import matplotlib.pyplot as plt
 
 
 def convert_av_training_set(av_training_set):
@@ -45,34 +46,35 @@ valid_dataset = tf.data.TFRecordDataset(filenames=valid_files)
 valid_dataset = valid_dataset.map(lambda x: tf.py_function(read_tfrecord, [x], (tf.float32, tf.int8)))
 valid_dataset = valid_dataset.batch(32)
 
-log_dir = "./logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-file_writer_cm = tf.summary.create_file_writer(log_dir + "/cm")
-
 model = tf.keras.Sequential([
     tf.keras.layers.Reshape(target_shape=(201, 1), input_shape=(201,)),
-    tf.keras.layers.Conv1D(16, 3, activation='relu'),
-    tf.keras.layers.MaxPool1D(pool_size=2),
+    tf.keras.layers.Conv1D(16, 3, activation=tf.nn.relu),
+    tf.keras.layers.MaxPool1D(pool_size=5),
     tf.keras.layers.Flatten(),
-    tf.keras.layers.Dense(48, activation="relu"),
-    tf.keras.layers.Dense(1, activation='sigmoid')
+    # tf.keras.layers.Dense(100, activation=tf.nn.relu),
+    tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
 ])
 model.summary()
 
 model.compile(
-    optimizer=tf.keras.optimizers.RMSprop(),
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.1),
     loss=tf.keras.losses.BinaryCrossentropy(),
-    metrics=[tf.keras.metrics.Accuracy()]
+    metrics=[tf.keras.metrics.BinaryCrossentropy()]
 )
 
+log_dir = "./logs/fit/" + datetime.datetime.now().strftime("%Y.%m.%d-%H.%M.%S")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+file_writer_cm = tf.summary.create_file_writer(log_dir + "/cm")
+
 confusion_matrix_callback = ConfusionMatrixCallback(log_dir, valid_dataset)
-confusion_matrix_callback.set_showing_confusion_matrix(True)
+# confusion_matrix_callback.set_showing_confusion_matrix(True)
+
 model.fit(
     x=train_dataset,
-    epochs=15,
+    epochs=50,
     validation_data=valid_dataset,
     callbacks=[
-        # tensorboard_callback,
+        tensorboard_callback,
         confusion_matrix_callback
     ],
 )
