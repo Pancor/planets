@@ -40,8 +40,9 @@ class ConfusionMatrixCallback(tf.keras.callbacks.Callback):
         return curves, labels
 
     def __log_confusion_matrix(self, epoch):
-        predictions = np.argmax(self.model.predict(self.curves), axis=1)
-        confusion_matrix = sklearn.metrics.confusion_matrix(self.labels, predictions)
+        raw_predictions = self.model.predict(self.curves)
+        labeled_predictions = np.array([self.__convert_predicts_to_labels(pred) for pred in raw_predictions])
+        confusion_matrix = sklearn.metrics.confusion_matrix(self.labels, labeled_predictions)
 
         figure_cm = self.__plot_confusion_matrix(confusion_matrix, ["PC", "NTP"])
         if self.is_showing_cm:
@@ -50,6 +51,10 @@ class ConfusionMatrixCallback(tf.keras.callbacks.Callback):
 
         with self.file_writer_cm.as_default():
             tf.summary.image("Confusion Matrix", cm_image, step=epoch)
+
+    @staticmethod
+    def __convert_predicts_to_labels(prediction):
+        return int(round(prediction[0]))
 
     @staticmethod
     def __plot_confusion_matrix(cm, class_names):
