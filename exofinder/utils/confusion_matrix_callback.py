@@ -29,11 +29,9 @@ class ConfusionMatrixCallback(tf.keras.callbacks.Callback):
         curves = []
         labels = []
 
-        for batch in dataset:
-            for curve in batch[0]:
-                curves.append(curve.numpy())
-            for label in batch[1]:
-                labels.append(label.numpy())
+        for data in dataset:
+            curves.append(data[0].numpy())
+            labels.append(data[1].numpy())
 
         curves = np.array(curves)
         labels = np.array(labels)
