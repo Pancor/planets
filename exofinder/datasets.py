@@ -1,14 +1,17 @@
 import tensorflow as tf
 
 
-def load_local_view_with_labels(path):
-    train_files = tf.io.gfile.glob(path)
-    train_dataset = tf.data.TFRecordDataset(filenames=train_files)
-    return __get_local_view_with_labels(train_dataset)
+def get_flux_series(path_to_files, flux_type="local"):
+    files = tf.io.gfile.glob(path_to_files)
+    dataset = tf.data.TFRecordDataset(filenames=files)
 
-
-def __get_local_view_with_labels(dataset):
-    return dataset.map(lambda x: tf.py_function(__read_local_tfrecord, [x], (tf.float32, tf.int8)))
+    if flux_type == "local":
+        return dataset.map(lambda x: tf.py_function(__read_local_tfrecord, [x], (tf.float32, tf.int8)))
+    elif flux_type == "global":
+        return dataset.map(lambda x: tf.py_function(__read_global_tfrecord, [x], tf.float32))
+    else:
+        error_msg = "Provided flux_type : " + flux_type + " is not supported."
+        raise ValueError(error_msg)
 
 
 def __read_local_tfrecord(record):
@@ -38,3 +41,14 @@ def __convert_av_training_set(av_training_set):
         raise ValueError(error_msg)
 
     return tf.constant(number_value, dtype=tf.int8)
+
+
+def __read_global_tfrecord(record):
+    features = {
+        "global_view": tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
+    }
+
+    example = tf.io.parse_single_example(record, features)
+    global_light_curve = example["global_view"]
+
+    return global_light_curve
