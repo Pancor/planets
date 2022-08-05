@@ -14,8 +14,8 @@ class ConfusionMatrixCallback(tf.keras.callbacks.Callback):
         super(ConfusionMatrixCallback, self).__init__()
         self.file_writer_cm = tf.summary.create_file_writer(log_dir + "/cm")
 
-        (curves, labels) = self.__extract_dataset(dataset)
-        self.curves = curves
+        self.dataset = dataset
+        labels = self.__extract_labels(dataset)
         self.labels = labels
 
     def on_epoch_end(self, epoch, logs=None):
@@ -25,20 +25,18 @@ class ConfusionMatrixCallback(tf.keras.callbacks.Callback):
         self.is_showing_cm = is_showing_cm
 
     @staticmethod
-    def __extract_dataset(dataset):
-        curves = []
+    def __extract_labels(dataset):
         labels = []
 
-        for data in dataset:
-            curves.append(data[0].numpy())
-            labels.append(data[1].numpy())
-
-        curves = np.array(curves)
+        for dataset_batch in dataset:
+            for label in dataset_batch[1].numpy():
+                labels.append(label)
         labels = np.array(labels)
-        return curves, labels
+
+        return labels
 
     def __log_confusion_matrix(self, epoch):
-        raw_predictions = self.model.predict(self.curves)
+        raw_predictions = self.model.predict(self.dataset)
         labeled_predictions = np.array([self.__convert_predicts_to_labels(pred) for pred in raw_predictions])
         confusion_matrix = sklearn.metrics.confusion_matrix(self.labels, labeled_predictions)
 
