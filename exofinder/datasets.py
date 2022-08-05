@@ -1,6 +1,24 @@
 import tensorflow as tf
 
 
+def convert_test_dataset_record(local_curves, global_curves):
+    return {
+               "local_flux_input": local_curves[0],
+               "global_flux_input": global_curves
+           }, local_curves[1], local_curves[2]
+
+
+def convert_valid_dataset_record(local_curves, global_curves):
+    return {
+               "local_flux_input": local_curves[0],
+               "global_flux_input": global_curves
+           }, local_curves[1]
+
+
+def set_shape_for_weight(inputs, labels, sample_weights):
+    return inputs, labels, tf.reshape(sample_weights, (len(sample_weights),))
+
+
 def get_flux_series(path_to_files, flux_type="local"):
     files = tf.io.gfile.glob(path_to_files)
     dataset = tf.data.TFRecordDataset(filenames=files)

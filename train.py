@@ -8,23 +8,6 @@ import datetime
 from exofinder.utils.confusion_matrix_callback import ConfusionMatrixCallback
 
 
-def set_shapes(x, y, sample_weights):
-    return x, y, tf.reshape(sample_weights, (len(sample_weights),))
-
-
-def test(x, y):
-    return {
-        "local_flux_input": x[0],
-        "global_flux_input": y
-    }, x[1], x[2]
-
-
-def test_valid(x, y):
-    return {
-               "local_flux_input": x[0],
-               "global_flux_input": y
-           }, x[1]
-
 local_train_dataset = exofinder.datasets.get_flux_series(path_to_files="./tfrecord/train-*")
 global_train_dataset = exofinder.datasets.get_flux_series(path_to_files="./tfrecord/train-*",
                                                           flux_type="global")
@@ -32,9 +15,18 @@ local_valid_dataset = exofinder.datasets.get_flux_series(path_to_files="./tfreco
 global_valid_dataset = exofinder.datasets.get_flux_series(path_to_files="./tfrecord/val-*",
                                                           flux_type="global")
 
-#weights = exofinder.utils.weights.calculate_weights(dataset=local_train_dataset)
+# weights = exofinder.utils.weights.calculate_weights(dataset=local_train_dataset)
 weights = np.array([0.64932, 2.17427])
 local_train_dataset = exofinder.utils.weights.add_weights(dataset=local_train_dataset, weights=weights)
+
+final_dataset = tf.data.Dataset.zip((local_train_dataset, global_train_dataset))
+final_dataset = final_dataset.map(exofinder.datasets.convert_test_dataset_record)
+final_dataset = final_dataset.batch(32)
+final_dataset = final_dataset.map(exofinder.datasets.set_shape_for_weight)
+
+valid_dataset = tf.data.Dataset.zip((local_valid_dataset, global_valid_dataset))
+valid_dataset = valid_dataset.map(exofinder.datasets.convert_valid_dataset_record)
+valid_dataset = valid_dataset.batch(32)
 
 local_view_model = exofinder.models.get_local_view_model()
 global_view_model = exofinder.models.get_global_view_model()
@@ -55,30 +47,6 @@ final_model.compile(
 log_dir = "./logs/fit/" + datetime.datetime.now().strftime("%Y.%m.%d-%H.%M.%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 file_writer_cm = tf.summary.create_file_writer(log_dir + "/cm")
-
-#local_train_dataset = local_train_dataset.batch(32)
-#local_train_dataset = local_train_dataset.map(lambda x, y, weight: (x, y, tf.reshape(weight, (len(weight),))))
-#
-# global_train_dataset = global_train_dataset.batch(32)
-
-final_dataset = tf.data.Dataset.zip((local_train_dataset, global_train_dataset))
-final_dataset = final_dataset.map(test)
-
-# for element in final_dataset.as_numpy_iterator():
-#     print(element)
-#     break
-
-# final_dataset = final_dataset.map(map_func=lambda x, y: new_py_function(
-#     func=test, inp=[x, y], Tout=({"local_flux_input": tf.float32, "global_flux_input": tf.float32}, tf.int8, tf.float32)
-# ))
-final_dataset = final_dataset.batch(32)
-final_dataset = final_dataset.map(lambda x, y, weight: (x, y, tf.reshape(weight, (len(weight),))))
-
-valid_dataset = tf.data.Dataset.zip((local_valid_dataset, global_valid_dataset))
-valid_dataset = valid_dataset.map(test_valid)
-valid_dataset = valid_dataset.batch(32)
-
-# final_model.summary()
 
 confusion_matrix_callback = ConfusionMatrixCallback(log_dir, valid_dataset)
 # confusion_matrix_callback.set_showing_confusion_matrix(True)
